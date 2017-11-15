@@ -1,6 +1,6 @@
 # Linux workstation security checklist
 
-Updated: 2017-01-23
+Updated: 2017-11-15
 
 ### Target audience
 
@@ -71,6 +71,7 @@ this section addresses core considerations when choosing a work system.
 - [ ] System supports SecureBoot _(ESSENTIAL)_
 - [ ] System has no firewire, thunderbolt or ExpressCard ports _(NICE)_
 - [ ] System has a TPM chip _(NICE)_
+- [ ] System has disabled Intel ME chip _(PARANOID)_
 
 ### Considerations
 
@@ -103,6 +104,28 @@ separately from the core processor, which can be used for additional platform
 security (such as to store full-disk encryption keys), but is not normally used
 for day-to-day workstation operation. At best, this is a nice-to-have, unless
 you have a specific need to use TPM for your workstation security.
+
+#### Intel Management Engine (IME)
+
+Almost every computer with an Intel processor ships with a fully integrated
+management platform chip called the Intel Management Engine (IME). Its purpose
+is to make it easier for device fleet administrators to provision and enroll
+systems, remotely track the device's location, power and network status, and
+even trigger such events as full remote system wipe in case of theft. This
+chip runs a MINIX operating system and comes with a builtin web server.
+
+Unfortunately, with great power come great vulnerabilities. Intel ME chips
+have been demonstrated to be vulnerable to both [local and remote
+attacks][26], allowing perpetrators to take full control over systems with
+Intel ME engine available. Any system with an enabled IME chip should be
+considered potentially vulnerable, especially if it has not received
+manufacturer firmware updates.
+
+There are [some laptop manufacturers][27] that have started providing systems
+with the Intel ME chip disabled, and it may be possible to manually disable
+the IME by using a tool such as [me_cleaner][25], though you should be mindful
+that it is an involved process and that disabling the IME may void the
+manufacturer support warranty (or even be against your employer policy).
 
 ## Pre-boot environment
 
@@ -150,7 +173,7 @@ what you should consider when picking a distribution to use.
 
 ### Checklist
 
-- [ ] Has a robust MAC/RBAC implementation (SELinux/AppArmor/GrSecurity) _(ESSENTIAL)_
+- [ ] Has a robust MAC/RBAC implementation (SELinux/AppArmor) _(ESSENTIAL)_
 - [ ] Publishes security bulletins _(ESSENTIAL)_
 - [ ] Provides timely security patches _(ESSENTIAL)_
 - [ ] Provides cryptographic verification of packages _(ESSENTIAL)_
@@ -159,7 +182,7 @@ what you should consider when picking a distribution to use.
 
 ### Considerations
 
-#### SELinux, AppArmor, and GrSecurity/PaX
+#### SELinux and AppArmor
 
 Mandatory Access Controls (MAC) or Role-Based Access Controls (RBAC) are an
 extension of the basic user/group security mechanism used in legacy POSIX
@@ -174,11 +197,13 @@ post-installation.
 Distributions that do not provide any MAC/RBAC mechanisms should be strongly
 avoided, as traditional POSIX user- and group-based security should be
 considered insufficient in this day and age. If you would like to start out
-with a MAC/RBAC workstation, AppArmor and GrSecurity/PaX are generally
-considered easier to learn than SELinux. Furthermore, on a workstation, where
-there are few or no externally listening daemons, and where user-run
-applications pose the highest risk, GrSecurity/PaX will offer more security
-benefits than just SELinux.
+with a MAC/RBAC workstation, AppArmor is generally considered easier to learn
+than SELinux.
+
+GrSecurity/PaX is no longer offered as a free download and, as a result,
+almost every publicly available distribution has stopped providing it. If this
+option remains available to you through your employer, you may choose to
+continue using GrSecurity/PaX on your workstation.
 
 #### Distro security bulletins
 
@@ -732,13 +757,6 @@ If you are using a distribution that comes bundled with SELinux (such as
 Fedora), here are some recommendation of how to make the best use of it to
 maximize your workstation security.
 
-#### Checklist
-
-- [ ] Make sure SELinux is enforcing on your workstation _(ESSENTIAL)_
-- [ ] Never blindly run `audit2allow -M`, always check _(ESSENTIAL)_
-- [ ] Never `setenforce 0` _(NICE)_
-- [ ] Switch your account to SELinux user `staff_u` _(NICE)_
-
 #### Considerations
 
 SELinux is a Mandatory Access Controls (MAC) extension to core POSIX
@@ -753,81 +771,6 @@ it on, as it will likely help prevent an attacker from escalating privileges
 to gain root-level access via a vulnerable daemon service.
 
 Our recommendation is to leave it on and enforcing.
-
-##### Never `setenforce 0`
-
-It's tempting to use `setenforce 0` to flip SELinux into permissive mode
-on a temporary basis, but you should avoid doing that. This essentially turns
-off SELinux for the entire system, while what you really want is to
-troubleshoot a particular application or daemon.
-
-Instead of `setenforce 0` you should be using `semanage permissive -a
-[somedomain_t]` to put only that domain into permissive mode. First, find out
-which domain is causing troubles by running `ausearch`:
-
-    ausearch -ts recent -m avc
-
-and then look for `scontext=` (source SELinux context) line, like so:
-
-    scontext=staff_u:staff_r:gpg_pinentry_t:s0-s0:c0.c1023
-                             ^^^^^^^^^^^^^^
-
-This tells you that the domain being denied is `gpg_pinentry_t`, so if you
-want to troubleshoot the application, you should add it to permissive domains:
-
-    semanage permissive -a gpg_pinentry_t
-
-This will allow you to use the application and collect the rest of the AVCs,
-which you can then use in conjunction with `audit2allow` to write a local
-policy. Once that is done and you see no new AVC denials, you can remove that
-domain from permissive by running:
-
-    semanage permissive -d gpg_pinentry_t
-
-##### Use your workstation as SELinux role staff_r
-
-SELinux comes with a native implementation of roles that prohibit or grant
-certain privileges based on the role associated with the user account. As an
-administrator, you should be using the `staff_r` role, which will restrict
-access to many configuration and other security-sensitive files, unless you
-first perform `sudo`.
-
-By default, accounts are created as `unconfined_r` and most applications you
-execute will run unconfined, without any (or with only very few) SELinux
-constraints. To switch your account to the `staff_r` role, run the following
-command:
-
-    usermod -Z staff_u [username]
-
-You should log out and log back in to enable the new role, at which point if
-you run `id -Z`, you'll see:
-
-    staff_u:staff_r:staff_t:s0-s0:c0.c1023
-
-When performing `sudo`, you should remember to add an extra flag to tell
-SELinux to transition to the "sysadmin" role. The command you want is:
-
-    sudo -i -r sysadm_r
-
-At which point `id -Z` will show:
-
-    staff_u:sysadm_r:sysadm_t:s0-s0:c0.c1023
-
-**WARNING**: you should be comfortable using `ausearch` and `audit2allow`
-before you make this switch, as it's possible some of your applications will
-no longer work when you're running as role `staff_r`. At the time of writing,
-the following popular applications are known to not work under `staff_r`
-without policy tweaks:
-
-- Chrome/Chromium
-- Skype
-- VirtualBox
-
-To switch back to `unconfined_r`, run the following command:
-
-    usermod -Z unconfined_u [username]
-
-and then log out and back in to get back into the comfort zone.
 
 ## Further reading
 
@@ -870,3 +813,6 @@ This work is licensed under a
 [22]: https://en.wikipedia.org/wiki/Universal_2nd_Factor
 [23]: http://www.dongleauth.info/
 [24]: https://subgraph.com/sgos/
+[25]: https://github.com/corna/me_cleaner
+[26]: https://en.wikipedia.org/wiki/Intel_Active_Management_Technology#Known_vulnerabilities_and_exploits
+[27]: https://puri.sm/posts/purism-librem-laptops-completely-disable-intel-management-engine/
