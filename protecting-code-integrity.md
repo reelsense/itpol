@@ -14,9 +14,10 @@ covers the following topics:
 3. How to protect your developer accounts
 
 We use the term "Free" as in "Freedom," but this guide can also be used for
-developing non-free or source-available ("Open Source") software. If you write
-code that goes into public source repositories, you can benefit from getting
-acquainted with and following this guide.
+any other kind of software that relies on contributions from a distributed
+team of developers. If you write code that goes into public source
+repositories, you can benefit from getting acquainted with and following this
+guide.
 
 ### Structure
 
@@ -389,7 +390,7 @@ all Linux distros, as well as installable via `brew install paperkey` on Macs.
 Run the following command, replacing `[fpr]` with the full fingerprint of your
 key:
 
-    $ gpg --export-secret-key [fpr] | paperkey > /tmp/key-backup.txt
+    $ gpg --export-secret-key [fpr] | paperkey -o /tmp/key-backup.txt
 
 The output will be in a format that is easy to OCR or input by hand, should
 you ever need to recover it. Print out that file, then take a pen and write
@@ -593,6 +594,23 @@ adding or revoking subkeys, or signing other people's keys.
 
 #### Remove the master key
 
+The files in our home directory are not as well protected as we like to think.
+They can be leaked or stolen via many different means:
+
+- by accident when making quick homedir copies to set up a new workstation
+- by systems administrator negligence or malice
+- via poorly secured backups
+- via malware in desktop apps (browsers, pdf viewers, etc)
+- via coercion when crossing international borders
+
+Protecting your key with a good passphrase greatly helps reduce the risk of
+any of the above, but passphrases can be discovered via keyloggers,
+shoulder-surfing, or any number of other means. For this reason, the
+recommended setup is to remove your master key from your home directory and
+store it on offline storage.
+
+##### Removing your master key
+
 Please see the previous section and make sure you have backed up your GnuPG
 directory in its entirety. What we are about to do will render your key
 useless if you do not have a usable backup!
@@ -668,9 +686,12 @@ better to remove it from your home directory.
 ### Considerations
 
 Even though the master key is now safe from being leaked or stolen, the
-subkeys are still in the home directory. Anyone who manages to get their hands
-on those will be able to decrypt your communication or fake your signatures
-(if they know the passphrase, that is).
+subkeys are still in your home directory. Anyone who manages to get their
+hands on those will be able to decrypt your communication or fake your
+signatures (if they know the passphrase). Furthermore, each time a GnuPG
+operation is performed, the keys are loaded into system memory and can be
+stolen from there by sufficiently advanced malware (think Meltdown and
+Spectre).
 
 The best way to completely protect your keys is to move them to a specialized
 hardware device that is capable of smartcard operations.
